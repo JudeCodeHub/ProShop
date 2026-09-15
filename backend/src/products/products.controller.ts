@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,17 +11,42 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../auth/roles.decorator.js';
 import { Role } from '../generated/prisma/client.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { ListProductsQueryDto } from './dto/list-products-query.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
+import { ProductImportService } from './import/product-import.service.js';
 import { ProductsService } from './products.service.js';
+
+export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly productImportService: ProductImportService,
+  ) {}
+
+  @Post('bulk-import')
+  @Roles(Role.admin)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_IMPORT_BYTES, files: 1 } }),
+  )
+  bulkImport(@UploadedFile() file: Express.Multer.File | undefined) {
+    if (!file) {
+      throw new BadRequestException('Upload a CSV file in the "file" form field');
+    }
+    if (!file.originalname.toLowerCase().endsWith('.csv')) {
+      throw new BadRequestException('Only .csv files are accepted');
+    }
+    return this.productImportService.import(file.buffer);
+  }
 
   @Get()
   findAll(@Query() query: ListProductsQueryDto) {

@@ -193,4 +193,59 @@ describe('Inventory (e2e)', () => {
     it('forbids a cashier', () =>
       api().get('/api/inventory/low-stock').set(auth(cashierToken)).expect(403));
   });
+
+  describe('GET /api/inventory/stock-adjustments', () => {
+    interface AdjustmentBody {
+      id: number;
+      qtyChange: number;
+      reason: string;
+      createdAt: string;
+      user: { id: number; name: string };
+      variant: { id: number; sku: string; size: string; color: string; productId: number; productName: string };
+    }
+    const history = async (query: string) =>
+      (await api().get(`/api/inventory/stock-adjustments${query}`).set(auth(adminToken)).expect(200))
+        .body as AdjustmentBody[];
+
+    it('lists one variant’s adjustments newest first, with the item and who made them', async () => {
+      const a = await newVariant(0);
+      const b = await newVariant(0);
+      await adjust(a.id, { qtyChange: 5, reason: 'First' }).expect(201);
+      await adjust(b.id, { qtyChange: 2, reason: 'Other item' }).expect(201);
+      await adjust(a.id, { qtyChange: -1, reason: 'Third' }).expect(201);
+
+      const rows = await history(`?variantId=${a.id}`);
+      expect(rows.map((r) => [r.qtyChange, r.reason])).toEqual([
+        [-1, 'Third'],
+        [5, 'First'],
+      ]);
+      expect(rows[0]).toMatchObject({
+        user: { id: adminId, name: 'I Admin' },
+        variant: { id: a.id, sku: a.sku, size: 'M', color: 'Black', productId: a.productId },
+      });
+      expect(rows[0].variant.productName).toContain('Stock Item');
+      expect(new Date(rows[0].createdAt).toString()).not.toBe('Invalid Date');
+    });
+
+    it('lists recent adjustments across all items and respects the limit', async () => {
+      const variant = await newVariant(0);
+      for (const n of [1, 2, 3]) {
+        await adjust(variant.id, { qtyChange: n, reason: `Batch ${n}` }).expect(201);
+      }
+      expect((await history('?limit=2')).map((r) => r.reason)).toEqual(['Batch 3', 'Batch 2']);
+    });
+
+    it('returns an empty list for a variant with no adjustments', async () => {
+      const variant = await newVariant(4);
+      expect(await history(`?variantId=${variant.id}`)).toEqual([]);
+    });
+
+    it('rejects bad filters and non-admins', async () => {
+      for (const query of ['?limit=0', '?limit=201', '?variantId=abc', '?user=1']) {
+        await api().get(`/api/inventory/stock-adjustments${query}`).set(auth(adminToken)).expect(400);
+      }
+      await api().get('/api/inventory/stock-adjustments').set(auth(cashierToken)).expect(403);
+      await api().get('/api/inventory/stock-adjustments').expect(401);
+    });
+  });
 });

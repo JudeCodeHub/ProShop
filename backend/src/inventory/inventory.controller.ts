@@ -12,6 +12,7 @@ import type { JwtPayload } from '../auth/jwt.strategy.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { Role } from '../generated/prisma/client.js';
 import { AdjustStockDto } from './dto/adjust-stock.dto.js';
+import { ListAdjustmentsQueryDto } from './dto/list-adjustments-query.dto.js';
 import { LowStockQueryDto } from './dto/low-stock-query.dto.js';
 import { InventoryService } from './inventory.service.js';
 
@@ -27,6 +28,11 @@ export class InventoryController {
     @Body() dto: AdjustStockDto,
   ) {
     return this.inventoryService.adjustStock(id, user.userId, dto);
+  }
+
+  @Get('inventory/stock-adjustments')
+  findAdjustments(@Query() query: ListAdjustmentsQueryDto) {
+    return this.inventoryService.findAdjustments(query);
   }
 
   @Get('inventory/low-stock')

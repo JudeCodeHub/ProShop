@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { isPrismaError, PrismaErrorCode } from '../prisma/prisma-errors.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AdjustStockDto } from './dto/adjust-stock.dto.js';
+import { ListAdjustmentsQueryDto } from './dto/list-adjustments-query.dto.js';
 
 @Injectable()
 export class InventoryService {
@@ -67,6 +68,42 @@ export class InventoryService {
       }
       throw error;
     }
+  }
+
+  async findAdjustments(query: ListAdjustmentsQueryDto) {
+    const rows = await this.prisma.stockAdjustment.findMany({
+      where: { variantId: query.variantId },
+      include: {
+        user: { select: { id: true, name: true } },
+        variant: {
+          select: {
+            id: true,
+            sku: true,
+            size: true,
+            color: true,
+            product: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: query.limit ?? 50,
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      qtyChange: row.qtyChange,
+      reason: row.reason,
+      createdAt: row.createdAt,
+      user: row.user,
+      variant: {
+        id: row.variant.id,
+        sku: row.variant.sku,
+        size: row.variant.size,
+        color: row.variant.color,
+        productId: row.variant.product.id,
+        productName: row.variant.product.name,
+      },
+    }));
   }
 
   findLowStock(threshold = this.defaultLowStockThreshold) {

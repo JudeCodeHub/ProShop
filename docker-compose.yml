@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: proshop-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: proshop
+      POSTGRES_PASSWORD: proshop
+      POSTGRES_DB: proshop_pos
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18+ images store data under /var/lib/postgresql, not /var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:

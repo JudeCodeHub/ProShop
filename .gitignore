@@ -12,6 +12,7 @@ build/
 .next/
 out/
 coverage/
+backend/src/generated/
 
 # Logs
 *.log

@@ -55,6 +55,7 @@ Staff logs in with `POST /api/auth/login`. After that, an admin creates other st
 
 ```bash
 cd frontend
+cp .env.example .env.local
 npm install
 npm run dev
 ```

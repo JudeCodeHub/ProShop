@@ -10,7 +10,6 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # Postgres 18+ images store data under /var/lib/postgresql, not /var/lib/postgresql/data
       - postgres_data:/var/lib/postgresql
 
 volumes:

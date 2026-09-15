@@ -23,4 +23,13 @@ export class ListProductsQueryDto {
   @IsNotEmpty()
   @MaxLength(100)
   brand?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  search?: string;
 }

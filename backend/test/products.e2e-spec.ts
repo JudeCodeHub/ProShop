@@ -165,6 +165,28 @@ describe('Products (e2e)', () => {
       expect(byBrand.every((p) => p.categoryId === categoryId)).toBe(true);
     });
 
+    it('searches name, brand, SKU and exact barcode without caring about case', async () => {
+      const runner = await createProduct({ name: `Search Runner ${run}` });
+      const sandal = await createProduct({ name: `Search Sandal ${run}`, brand: `OtherBrand${run}` });
+      await prisma.productVariant.create({
+        data: { productId: runner.id, size: '41', color: 'Red', sku: `FIND-SKU-${run}`, barcode: `2009${run}`, sellPrice: 10 },
+      });
+      const ids = async (query: string) =>
+        (
+          (await api().get(`/api/products?${query}`).set(auth(cashierToken)).expect(200)).body as ProductBody[]
+        ).map((p) => p.id);
+
+      expect(await ids(`search=${encodeURIComponent(`search runner ${run}`)}`)).toEqual([runner.id]);
+      expect(await ids(`search=otherbrand${run}`)).toEqual([sandal.id]);
+      expect(await ids(`search=find-sku-${run}`)).toEqual([runner.id]);
+      expect(await ids(`search=2009${run}`)).toEqual([runner.id]);
+      expect(await ids(`search=009${run}`)).toEqual([]);
+      expect(await ids(`search=${encodeURIComponent(`Search Runner ${run}`)}&categoryId=${otherCategoryId}`)).toEqual([]);
+    });
+
+    it('rejects a blank search', () =>
+      api().get('/api/products?search=%20%20').set(auth(adminToken)).expect(400));
+
     it('rejects invalid and unknown query parameters', async () => {
       await api().get('/api/products?categoryId=abc').set(auth(adminToken)).expect(400);
       await api().get('/api/products?color=red').set(auth(adminToken)).expect(400);

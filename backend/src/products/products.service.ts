@@ -27,6 +27,22 @@ export class ProductsService {
         brand: query.brand
           ? { equals: query.brand, mode: 'insensitive' }
           : undefined,
+        OR: query.search
+          ? [
+              { name: { contains: query.search, mode: 'insensitive' } },
+              { brand: { contains: query.search, mode: 'insensitive' } },
+              {
+                variants: {
+                  some: {
+                    OR: [
+                      { sku: { contains: query.search, mode: 'insensitive' } },
+                      { barcode: query.search },
+                    ],
+                  },
+                },
+              },
+            ]
+          : undefined,
       },
       include: productInclude,
       orderBy: [{ name: 'asc' }, { id: 'asc' }],

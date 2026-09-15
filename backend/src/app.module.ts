@@ -11,6 +11,7 @@ import { OrdersModule } from './orders/orders.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { SuppliersModule } from './suppliers/suppliers.module.js';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module.js';
+import { SettingsModule } from './settings/settings.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module.j
     ReportsModule,
     SuppliersModule,
     PurchaseOrdersModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
 })

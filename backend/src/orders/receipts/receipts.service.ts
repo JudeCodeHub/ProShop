@@ -1,15 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { SettingsService } from '../../settings/settings.service.js';
 import { calculateSubtotal } from '../order-totals.js';
 import { renderReceiptPdf } from './receipt-pdf.js';
 import { receiptNumber, type Receipt } from './receipt.js';
 
-const DEFAULT_STORE_NAME = 'ProShop';
-const DEFAULT_CURRENCY = 'LKR';
-
 @Injectable()
 export class ReceiptsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
 
   async getReceipt(orderId: number): Promise<Receipt> {
     const [order, settings] = await Promise.all([
@@ -33,7 +34,7 @@ export class ReceiptsService {
           },
         },
       }),
-      this.prisma.settings.findUnique({ where: { id: 1 } }),
+      this.settings.get(),
     ]);
     if (!order) {
       throw new NotFoundException(`Order ${orderId} not found`);
@@ -49,10 +50,10 @@ export class ReceiptsService {
       status: order.status,
       issuedAt: order.createdAt.toISOString(),
       store: {
-        name: settings?.storeName ?? DEFAULT_STORE_NAME,
-        address: settings?.address ?? null,
-        logoUrl: settings?.logoUrl ?? null,
-        footer: settings?.receiptFooterText ?? null,
+        name: settings.storeName,
+        address: settings.address,
+        logoUrl: settings.logoUrl,
+        footer: settings.receiptFooterText,
       },
       cashier: order.cashier.name,
       customer: order.customer,
@@ -64,7 +65,7 @@ export class ReceiptsService {
         unitPrice: item.priceAtSale.toFixed(2),
         lineTotal: item.priceAtSale.times(item.qty).toFixed(2),
       })),
-      currency: settings?.currency ?? DEFAULT_CURRENCY,
+      currency: settings.currency,
       subtotal: subtotal.toFixed(2),
       discount: order.discount.toFixed(2),
       taxRate: order.taxRate.toFixed(2),

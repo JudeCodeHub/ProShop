@@ -9,6 +9,7 @@ import {
 import type { JwtPayload } from '../auth/jwt.strategy.js';
 import { OrderStatus, Prisma, Role } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import { CreateOrderDto, OrderItemDto } from './dto/create-order.dto.js';
 import { calculateSubtotal, calculateTotals } from './order-totals.js';
 
@@ -51,7 +52,10 @@ const byVariantId = (a: StockLine, b: StockLine) => a.variantId - b.variantId;
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
 
   create(cashierId: number, dto: CreateOrderDto) {
     return this.placeOrder(cashierId, dto, OrderStatus.completed);
@@ -219,14 +223,8 @@ export class OrdersService {
       );
     }
 
-    const settings = await tx.settings.findUnique({
-      where: { id: 1 },
-      select: { taxRate: true },
-    });
-    return {
-      lines,
-      totals: calculateTotals(lines, discount, settings?.taxRate ?? new Prisma.Decimal(0)),
-    };
+    const { taxRate } = await this.settings.get(tx);
+    return { lines, totals: calculateTotals(lines, discount, taxRate) };
   }
 
   private async deductStock(tx: Tx, lines: StockLine[]) {

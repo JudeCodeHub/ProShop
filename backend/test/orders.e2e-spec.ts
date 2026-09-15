@@ -422,7 +422,7 @@ describe('Orders (e2e)', () => {
       const variant = await newVariant('10.00', 5);
       const done = await sellOne(variant.id, 2);
       await prisma.return.create({
-        data: { orderId: done.id, variantId: variant.id, qty: 1, reason: 'Wrong size', refundAmount: 10 },
+        data: { orderId: done.id, variantId: variant.id, qty: 1, reason: 'Wrong size', refundAmount: 10, processedById: adminId },
       });
 
       const res = await voidOrder(done.id).expect(409);

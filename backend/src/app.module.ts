@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ProductsModule } from './products/products.module.js';
 import { VariantsModule } from './variants/variants.module.js';
+import { CategoriesModule } from './categories/categories.module.js';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { VariantsModule } from './variants/variants.module.js';
     AuthModule,
     ProductsModule,
     VariantsModule,
+    CategoriesModule,
   ],
   controllers: [HealthController],
 })

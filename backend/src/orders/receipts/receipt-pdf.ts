@@ -1,10 +1,10 @@
 import PDFDocument from 'pdfkit';
+import { STORE_TIME_ZONE } from '../../common/store-time.js';
 import type { Receipt } from './receipt.js';
 
 const PAGE_WIDTH = 226;
 const MARGIN = 14;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const STORE_TIME_ZONE = 'Asia/Colombo';
 
 const moneyFormat = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,

@@ -38,9 +38,18 @@ This runs PostgreSQL on `localhost:5432` (user `proshop`, password `proshop`, da
 cd backend
 cp .env.example .env
 npm install
+npx prisma migrate deploy
 npx prisma generate
 npm run start:dev
 ```
+
+Create the first admin account once (the command refuses to run if an admin already exists):
+
+```bash
+ADMIN_NAME="Store Owner" ADMIN_EMAIL=owner@proshop.lk ADMIN_PASSWORD=change-me-now npm run create-admin
+```
+
+Staff logs in with `POST /api/auth/login`. After that, an admin creates other staff accounts with `POST /api/auth/register`.
 
 **3. Frontend** — runs on <http://localhost:3000> (in a second terminal)
 

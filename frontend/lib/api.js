@@ -1,8 +1,5 @@
-import { getToken } from "./token.js";
-
-export const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api"
-).replace(/\/+$/, "");
+export const API_BASE_PATH = "/api/backend";
+export const UNAUTHORIZED_EVENT = "proshop:unauthorized";
 
 function messageFrom(status, body) {
   if (Array.isArray(body?.message)) {
@@ -40,33 +37,33 @@ async function readBody(response) {
   return response.blob();
 }
 
-export async function apiFetch(
-  path,
-  { method = "GET", body, headers, token = getToken(), ...init } = {},
-) {
+export async function apiFetch(path, { method = "GET", body, headers, ...init } = {}) {
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   const isJson = body !== undefined && !isFormData;
-  const url = `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = `${API_BASE_PATH}${path.startsWith("/") ? path : `/${path}`}`;
 
   let response;
   try {
     response = await fetch(url, {
+      credentials: "same-origin",
       ...init,
       method,
       headers: {
         Accept: "application/json",
         ...(isJson && { "Content-Type": "application/json" }),
-        ...(token && { Authorization: `Bearer ${token}` }),
         ...headers,
       },
       body: isJson ? JSON.stringify(body) : body,
     });
   } catch (error) {
-    throw new ApiError(0, { message: `Cannot reach the server at ${API_URL}` }, { cause: error });
+    throw new ApiError(0, { message: "Cannot reach the server. Please try again." }, { cause: error });
   }
 
   const data = await readBody(response);
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
     throw new ApiError(response.status, data);
   }
   return data;

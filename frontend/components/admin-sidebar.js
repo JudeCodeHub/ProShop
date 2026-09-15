@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LogoutButton from "./logout-button";
 import NavLink from "./nav-link";
 
 const NAV_SECTIONS = [
@@ -69,6 +70,8 @@ export default function AdminSidebar() {
           </div>
         ))}
       </nav>
+
+      <LogoutButton className="border-t border-slate-800 px-5 py-3 text-slate-300" />
 
       <Link
         href="/pos"

@@ -1,3 +1,4 @@
+import LogoutButton from "@/components/logout-button";
 import NavLink from "@/components/nav-link";
 
 const linkClasses = {
@@ -9,7 +10,7 @@ const linkClasses = {
 export default function PosLayout({ children }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between bg-slate-900 px-4 py-2">
+      <header className="flex items-center justify-between gap-4 bg-slate-900 px-4 py-2">
         <span className="font-semibold text-white">ProShop POS</span>
         <nav className="flex gap-1" aria-label="POS">
           <NavLink href="/pos" exact {...linkClasses}>
@@ -19,6 +20,7 @@ export default function PosLayout({ children }) {
             Held sales
           </NavLink>
         </nav>
+        <LogoutButton className="text-slate-300" />
       </header>
       <main className="flex-1 p-4">{children}</main>
     </div>

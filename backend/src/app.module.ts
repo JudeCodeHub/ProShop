@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { ProductsModule } from './products/products.module.js';
 import { VariantsModule } from './variants/variants.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
+import { InventoryModule } from './inventory/inventory.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CategoriesModule } from './categories/categories.module.js';
     ProductsModule,
     VariantsModule,
     CategoriesModule,
+    InventoryModule,
   ],
   controllers: [HealthController],
 })

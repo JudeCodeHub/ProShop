@@ -45,4 +45,10 @@ export class CreateOrderDto {
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000000)
+  redeemPoints?: number;
 }

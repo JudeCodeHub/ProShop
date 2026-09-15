@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Customer" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN     "pointsEarned" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "pointsRedeemed" INTEGER NOT NULL DEFAULT 0;

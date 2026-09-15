@@ -7,17 +7,25 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { JwtPayload } from '../auth/jwt.strategy.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { Role } from '../generated/prisma/client.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
+import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { OrdersService } from './orders.service.js';
 
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
+  @Get()
+  @Roles(Role.admin)
+  findAll(@Query() query: ListOrdersQueryDto) {
+    return this.ordersService.findAll(query);
+  }
 
   @Post()
   @Roles(Role.cashier, Role.admin)
@@ -35,6 +43,12 @@ export class OrdersController {
   @Roles(Role.cashier, Role.admin)
   findHeld(@CurrentUser() user: JwtPayload) {
     return this.ordersService.findHeld(user.userId);
+  }
+
+  @Get(':id')
+  @Roles(Role.admin)
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.findOne(id);
   }
 
   @Post(':id/resume')

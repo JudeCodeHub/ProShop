@@ -7,10 +7,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { JwtPayload } from '../auth/jwt.strategy.js';
+import { storeDayStartUtc } from '../common/store-time.js';
+import { LoyaltyService } from '../customers/loyalty.service.js';
 import { OrderStatus, Prisma, Role } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { addDays } from '../reports/report-range.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { CreateOrderDto, OrderItemDto } from './dto/create-order.dto.js';
+import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { calculateSubtotal, calculateTotals } from './order-totals.js';
 
 type Tx = Prisma.TransactionClient;
@@ -28,6 +32,7 @@ const orderDetails = {
     include: {
       variant: {
         select: {
+          productId: true,
           sku: true,
           size: true,
           color: true,
@@ -49,12 +54,14 @@ function mergeQuantities(items: OrderItemDto[]): Map<number, number> {
 }
 
 const byVariantId = (a: StockLine, b: StockLine) => a.variantId - b.variantId;
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   create(cashierId: number, dto: CreateOrderDto) {
@@ -74,6 +81,104 @@ export class OrdersService {
     return orders.map((order) => this.toResponse(order));
   }
 
+  async findAll(query: ListOrdersQueryDto) {
+    if (query.from && query.to && query.from > query.to) {
+      throw new BadRequestException('from must be on or before to');
+    }
+
+    const where: Prisma.OrderWhereInput = {
+      status: query.status,
+      cashierId: query.cashierId,
+      createdAt:
+        query.from || query.to
+          ? {
+              gte: query.from ? storeDayStartUtc(query.from) : undefined,
+              lt: query.to ? storeDayStartUtc(addDays(query.to, 1)) : undefined,
+            }
+          : undefined,
+    };
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          cashier: { select: { id: true, name: true } },
+          customer: { select: { id: true, name: true } },
+          items: { select: { qty: true } },
+          _count: { select: { returns: true } },
+        },
+      }),
+    ]);
+
+    return {
+      page,
+      pageSize,
+      total,
+      items: orders.map((order) => ({
+        id: order.id,
+        createdAt: order.createdAt,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        cashier: order.cashier,
+        customer: order.customer,
+        itemCount: order.items.reduce((sum, item) => sum + item.qty, 0),
+        total: order.total.toFixed(2),
+        returnCount: order._count.returns,
+      })),
+    };
+  }
+
+  async findOne(id: number) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: {
+        ...orderDetails,
+        returns: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: {
+            processedBy: { select: { id: true, name: true } },
+            exchangeVariant: { select: { sku: true, size: true, color: true } },
+          },
+        },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order ${id} not found`);
+    }
+
+    const returnedQty = new Map<number, number>();
+    for (const record of order.returns) {
+      returnedQty.set(record.variantId, (returnedQty.get(record.variantId) ?? 0) + record.qty);
+    }
+
+    const base = this.toResponse(order);
+    return {
+      ...base,
+      items: base.items.map((item) => ({
+        ...item,
+        returnedQty: returnedQty.get(item.variantId) ?? 0,
+      })),
+      returns: order.returns.map((record) => ({
+        id: record.id,
+        type: record.type,
+        variantId: record.variantId,
+        qty: record.qty,
+        reason: record.reason,
+        refundAmount: record.refundAmount.toFixed(2),
+        amountDue: record.amountDue.toFixed(2),
+        createdAt: record.createdAt,
+        processedBy: record.processedBy,
+        exchangeItem: record.exchangeVariant,
+      })),
+    };
+  }
+
   resume(id: number, user: JwtPayload) {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
@@ -81,6 +186,8 @@ export class OrdersService {
         select: {
           status: true,
           cashierId: true,
+          customerId: true,
+          total: true,
           items: { select: { variantId: true, qty: true } },
         },
       });
@@ -103,6 +210,18 @@ export class OrdersService {
       }
 
       await this.deductStock(tx, order.items);
+
+      if (order.customerId !== null) {
+        const earned = this.loyalty.pointsEarnedFor(order.total);
+        if (earned > 0) {
+          await tx.order.update({ where: { id }, data: { pointsEarned: earned } });
+          await tx.customer.update({
+            where: { id: order.customerId },
+            data: { loyaltyPoints: { increment: earned } },
+          });
+        }
+      }
+
       return this.toResponse(
         await tx.order.findUniqueOrThrow({ where: { id }, include: orderDetails }),
       );
@@ -115,6 +234,9 @@ export class OrdersService {
         where: { id },
         select: {
           status: true,
+          customerId: true,
+          pointsEarned: true,
+          pointsRedeemed: true,
           items: { select: { variantId: true, qty: true } },
           _count: { select: { returns: true } },
         },
@@ -146,6 +268,11 @@ export class OrdersService {
             data: { stockQty: { increment: line.qty } },
           });
         }
+
+        const pointsChange = order.pointsRedeemed - order.pointsEarned;
+        if (order.customerId !== null && pointsChange !== 0) {
+          await tx.$executeRaw`UPDATE "Customer" SET "loyaltyPoints" = GREATEST(0, "loyaltyPoints" + ${pointsChange}) WHERE id = ${order.customerId}`;
+        }
       }
 
       return this.toResponse(
@@ -156,10 +283,30 @@ export class OrdersService {
 
   private placeOrder(cashierId: number, dto: CreateOrderDto, status: OrderStatus) {
     return this.prisma.$transaction(async (tx) => {
+      const completed = status === OrderStatus.completed;
+      if (!completed && dto.redeemPoints !== undefined) {
+        throw new BadRequestException('Loyalty points can only be redeemed when completing a sale');
+      }
+
       const { lines, totals } = await this.priceOrder(tx, dto);
-      if (status === OrderStatus.completed) {
+      if (completed) {
         await this.deductStock(tx, lines);
       }
+
+      if (completed && dto.redeemPoints !== undefined) {
+        const { count } = await tx.customer.updateMany({
+          where: { id: dto.customerId, loyaltyPoints: { gte: dto.redeemPoints } },
+          data: { loyaltyPoints: { decrement: dto.redeemPoints } },
+        });
+        if (count === 0) {
+          throw new ConflictException(
+            `Customer ${dto.customerId} no longer has ${plural(dto.redeemPoints, 'loyalty point')}. Please try again.`,
+          );
+        }
+      }
+
+      const pointsEarned =
+        completed && dto.customerId !== undefined ? this.loyalty.pointsEarnedFor(totals.total) : 0;
 
       const order = await tx.order.create({
         data: {
@@ -171,6 +318,8 @@ export class OrdersService {
           tax: totals.tax,
           taxRate: totals.taxRate,
           total: totals.total,
+          pointsEarned,
+          pointsRedeemed: dto.redeemPoints ?? 0,
           items: {
             create: lines.map((line) => ({
               variantId: line.variantId,
@@ -181,18 +330,35 @@ export class OrdersService {
         },
         include: orderDetails,
       });
+
+      if (pointsEarned > 0) {
+        await tx.customer.update({
+          where: { id: dto.customerId },
+          data: { loyaltyPoints: { increment: pointsEarned } },
+        });
+      }
+
       return this.toResponse(order);
     });
   }
 
   private async priceOrder(tx: Tx, dto: CreateOrderDto) {
+    if (dto.redeemPoints !== undefined && dto.customerId === undefined) {
+      throw new BadRequestException('Choose a customer to redeem loyalty points');
+    }
+
     if (dto.customerId !== undefined) {
       const customer = await tx.customer.findUnique({
         where: { id: dto.customerId },
-        select: { id: true },
+        select: { id: true, loyaltyPoints: true },
       });
       if (!customer) {
         throw new BadRequestException(`Customer ${dto.customerId} does not exist`);
+      }
+      if (dto.redeemPoints !== undefined && dto.redeemPoints > customer.loyaltyPoints) {
+        throw new ConflictException(
+          `Customer ${dto.customerId} has only ${plural(customer.loyaltyPoints, 'loyalty point')}`,
+        );
       }
     }
 
@@ -215,11 +381,16 @@ export class OrdersService {
       unitPrice: prices.get(id)!,
     }));
 
-    const discount = new Prisma.Decimal(dto.discount ?? 0);
+    const pointsDiscount = dto.redeemPoints
+      ? this.loyalty.discountFor(dto.redeemPoints)
+      : new Prisma.Decimal(0);
+    const discount = new Prisma.Decimal(dto.discount ?? 0).plus(pointsDiscount);
     const subtotal = calculateSubtotal(lines);
     if (discount.gt(subtotal)) {
       throw new BadRequestException(
-        `Discount ${discount.toFixed(2)} is more than the subtotal ${subtotal.toFixed(2)}`,
+        pointsDiscount.gt(0)
+          ? `Discount ${discount.toFixed(2)} (including ${pointsDiscount.toFixed(2)} from loyalty points) is more than the subtotal ${subtotal.toFixed(2)}`
+          : `Discount ${discount.toFixed(2)} is more than the subtotal ${subtotal.toFixed(2)}`,
       );
     }
 
@@ -269,6 +440,7 @@ export class OrdersService {
     const items = order.items.map((item) => ({
       id: item.id,
       variantId: item.variantId,
+      productId: item.variant.productId,
       sku: item.variant.sku,
       productName: item.variant.product.name,
       size: item.variant.size,
@@ -294,6 +466,8 @@ export class OrdersService {
       taxRate: order.taxRate.toFixed(2),
       tax: order.tax.toFixed(2),
       total: order.total.toFixed(2),
+      pointsEarned: order.pointsEarned,
+      pointsRedeemed: order.pointsRedeemed,
     };
   }
 }

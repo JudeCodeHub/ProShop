@@ -85,29 +85,32 @@ model ProductVariant {
 }
 
 model Customer {
-  id            Int     @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   name          String
-  phone         String? @unique
-  email         String? @unique
-  loyaltyPoints Int     @default(0)
+  phone         String?  @unique
+  email         String?  @unique
+  loyaltyPoints Int      @default(0)
+  createdAt     DateTime @default(now())
   orders        Order[]
 }
 
 model Order {
-  id            Int           @id @default(autoincrement())
-  customerId    Int?
-  cashierId     Int
-  total         Decimal       @db.Decimal(10, 2)
-  discount      Decimal       @default(0) @db.Decimal(10, 2)
-  tax           Decimal       @default(0) @db.Decimal(10, 2)
-  taxRate       Decimal       @default(0) @db.Decimal(5, 2)
-  paymentMethod PaymentMethod
-  status        OrderStatus   @default(completed)
-  createdAt     DateTime      @default(now())
-  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  cashier       User          @relation(fields: [cashierId], references: [id], onDelete: Restrict)
-  items         OrderItem[]
-  returns       Return[]
+  id             Int           @id @default(autoincrement())
+  customerId     Int?
+  cashierId      Int
+  total          Decimal       @db.Decimal(10, 2)
+  discount       Decimal       @default(0) @db.Decimal(10, 2)
+  tax            Decimal       @default(0) @db.Decimal(10, 2)
+  taxRate        Decimal       @default(0) @db.Decimal(5, 2)
+  pointsEarned   Int           @default(0)
+  pointsRedeemed Int           @default(0)
+  paymentMethod  PaymentMethod
+  status         OrderStatus   @default(completed)
+  createdAt      DateTime      @default(now())
+  customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cashier        User          @relation(fields: [cashierId], references: [id], onDelete: Restrict)
+  items          OrderItem[]
+  returns        Return[]
 
   @@index([customerId])
   @@index([cashierId, status])

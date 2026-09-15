@@ -13,6 +13,8 @@ import { SuppliersModule } from './suppliers/suppliers.module.js';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { ReturnsModule } from './returns/returns.module.js';
+import { UsersModule } from './users/users.module.js';
+import { CustomersModule } from './customers/customers.module.js';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { ReturnsModule } from './returns/returns.module.js';
     PurchaseOrdersModule,
     SettingsModule,
     ReturnsModule,
+    UsersModule,
+    CustomersModule,
   ],
   controllers: [HealthController],
 })

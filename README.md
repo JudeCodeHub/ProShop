@@ -27,8 +27,9 @@ proshop-pos/
 
 ```bash
 cd backend
+cp .env.example .env
 npm install
-PORT=3001 npm run start:dev
+npm run start:dev
 ```
 
 **2. Frontend** — runs on <http://localhost:3000> (in a second terminal)

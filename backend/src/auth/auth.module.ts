@@ -7,7 +7,6 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { JwtStrategy } from './jwt.strategy.js';
-import { RoleCheckController } from './role-check.controller.js';
 import { RolesGuard } from './roles.guard.js';
 
 @Module({
@@ -26,7 +25,7 @@ import { RolesGuard } from './roles.guard.js';
       }),
     }),
   ],
-  controllers: [AuthController, RoleCheckController],
+  controllers: [AuthController],
   providers: [
     AuthService,
     JwtStrategy,

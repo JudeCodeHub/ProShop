@@ -11,6 +11,9 @@ import { PrismaService } from './../src/prisma/prisma.service.js';
 
 const EMAIL_DOMAIN = '@guards-e2e.test';
 const PASSWORD = 'correct-horse-9';
+const ADMIN_ROUTE = '/api/users';
+const STAFF_ROUTE = '/api/settings';
+const MISSING_USER_ID = 2147483000;
 
 describe('Global guards (e2e)', () => {
   let app: INestApplication<App>;
@@ -79,8 +82,8 @@ describe('Global guards (e2e)', () => {
 
   describe('JwtAuthGuard (global)', () => {
     it('blocks protected routes without a token', async () => {
-      await get('/api/role-check/staff').expect(401);
-      await get('/api/role-check/admin').expect(401);
+      await get(STAFF_ROUTE).expect(401);
+      await get(ADMIN_ROUTE).expect(401);
     });
 
     it('rejects a token signed with a different secret', async () => {
@@ -88,7 +91,7 @@ describe('Global guards (e2e)', () => {
         userId: adminId,
         role: 'admin',
       });
-      await get('/api/role-check/admin', forged).expect(401);
+      await get(ADMIN_ROUTE, forged).expect(401);
     });
 
     it('rejects an expired token', async () => {
@@ -96,33 +99,35 @@ describe('Global guards (e2e)', () => {
         { userId: adminId, role: 'admin', iat: Math.floor(Date.now() / 1000) - 3600 },
         { expiresIn: '1s' },
       );
-      await get('/api/role-check/admin', expired).expect(401);
+      await get(ADMIN_ROUTE, expired).expect(401);
+    });
+
+    it('rejects a token for a user who no longer exists', async () => {
+      const ghost = await jwt.signAsync({ userId: MISSING_USER_ID, role: 'admin' });
+      await get(ADMIN_ROUTE, ghost).expect(401);
     });
   });
 
   describe('@Roles("admin")', () => {
-    it('forbids a cashier', () =>
-      get('/api/role-check/admin', cashierToken).expect(403));
+    it('forbids a cashier', () => get(ADMIN_ROUTE, cashierToken).expect(403));
 
-    it('allows an admin and exposes the token user', async () => {
-      const res = await get('/api/role-check/admin', adminToken).expect(200);
-      expect(res.body).toEqual({
-        access: 'admin',
-        user: { userId: adminId, role: 'admin' },
-      });
+    it('allows an admin', async () => {
+      const res = await get(ADMIN_ROUTE, adminToken).expect(200);
+      expect(Array.isArray(res.body)).toBe(true);
     });
   });
 
   describe('@Roles("cashier", "admin")', () => {
     it('allows a cashier', async () => {
-      const res = await get('/api/role-check/staff', cashierToken).expect(200);
-      expect(res.body).toEqual({
-        access: 'staff',
-        user: { userId: cashierId, role: 'cashier' },
-      });
+      const res = await get(STAFF_ROUTE, cashierToken).expect(200);
+      expect(res.body).toHaveProperty('currency');
     });
 
-    it('allows an admin', () =>
-      get('/api/role-check/staff', adminToken).expect(200));
+    it('allows an admin', () => get(STAFF_ROUTE, adminToken).expect(200));
+
+    it('takes the role from the database, not from the token', async () => {
+      const stale = await jwt.signAsync({ userId: cashierId, role: 'admin' });
+      await get(ADMIN_ROUTE, stale).expect(403);
+    });
   });
 });

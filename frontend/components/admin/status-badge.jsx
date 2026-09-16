@@ -3,6 +3,8 @@ const STYLES = {
   held: "bg-amber-50 text-amber-800 ring-amber-200",
   voided: "bg-slate-100 text-slate-600 ring-slate-300",
   return: "bg-sky-50 text-sky-700 ring-sky-200",
+  pending: "bg-amber-50 text-amber-800 ring-amber-200",
+  received: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   exchange: "bg-violet-50 text-violet-700 ring-violet-200",
 };
 

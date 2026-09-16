@@ -55,6 +55,7 @@ describe('AuthService', () => {
       name: 'Admin',
       email: 'admin@proshop.lk',
       role: 'admin',
+      isActive: true,
       password: await bcrypt.hash(password, 4),
       createdAt: new Date(),
     });
@@ -80,6 +81,13 @@ describe('AuthService', () => {
       await expect(
         service.login({ email: 'admin@proshop.lk', password: 'wrong-pass' }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects a deactivated account even with the right password', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...(await user()), isActive: false });
+      await expect(
+        service.login({ email: 'admin@proshop.lk', password }),
+      ).rejects.toThrow('This account has been deactivated');
     });
 
     it('rejects an unknown email', async () => {

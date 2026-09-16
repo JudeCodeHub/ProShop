@@ -49,7 +49,16 @@ Create the first admin account once (the command refuses to run if an admin alre
 ADMIN_NAME="Store Owner" ADMIN_EMAIL=owner@proshop.lk ADMIN_PASSWORD=change-me-now npm run create-admin
 ```
 
-Staff logs in with `POST /api/auth/login`. After that, an admin creates other staff accounts with `POST /api/auth/register`.
+Staff logs in at `/login`. After that, an admin adds, deactivates and resets the passwords of other staff on the **Users** page.
+
+**Sample data (optional)** — instead of starting empty, fill the database with one admin, one cashier, four categories, nine products with variants, and the store settings row:
+
+```bash
+npm run build
+npx prisma db seed
+```
+
+It signs in as `admin@proshop.lk` / `admin-password-1` and `cashier@proshop.lk` / `cashier-password-1`. Change these on the Users page before real use, or set your own with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_CASHIER_EMAIL` and `SEED_CASHIER_PASSWORD`. Running it again is safe: it updates the same rows instead of adding duplicates.
 
 **3. Frontend** — runs on <http://localhost:3000> (in a second terminal)
 

@@ -32,7 +32,14 @@ export class AuthService {
           password,
           role: dto.role ?? Role.cashier,
         },
-        select: { id: true, name: true, email: true, role: true, createdAt: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+        },
       });
     } catch (error) {
       if (
@@ -53,6 +60,9 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, hash);
     if (!user || !valid) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedException('This account has been deactivated');
     }
 
     const payload: JwtPayload = { userId: user.id, role: user.role };

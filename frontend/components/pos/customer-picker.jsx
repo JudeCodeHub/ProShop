@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatMoney, toCents } from "@/lib/money";
+import { validateCustomer } from "@/lib/validation";
 
 const SEARCH_DELAY_MS = 250;
 const smallInput =
@@ -55,8 +56,10 @@ export default function CustomerPicker({ customer, redemption, currency, disable
 
   async function createCustomer(event) {
     event.preventDefault();
-    if (!draft.name.trim()) {
-      setError("Enter the customer's name.");
+    const found = validateCustomer(draft);
+    const problem = found.name ?? found.phone;
+    if (problem) {
+      setError(problem);
       return;
     }
     setBusy(true);

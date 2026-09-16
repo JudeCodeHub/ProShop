@@ -10,12 +10,13 @@ import { formatMoney, toCents } from "@/lib/money";
 import {
   draftBody,
   draftTotals,
+  hasDraftErrors,
   lineFrom,
   searchVariants,
   validateDraft,
   variantOptions,
 } from "@/lib/purchase-orders";
-import { buttonClass, cardClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
 
 export default function PurchaseOrderForm() {
@@ -29,6 +30,7 @@ export default function PurchaseOrderForm() {
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({ lines: {} });
   const [error, setError] = useState("");
 
   const options = useMemo(() => variantOptions(products.data ?? []), [products.data]);
@@ -42,21 +44,39 @@ export default function PurchaseOrderForm() {
     setLines((current) => [...current, lineFrom(option)]);
     setSearch("");
     setError("");
+    setErrors((current) => ({ ...current, form: undefined }));
   }
 
-  const updateLine = (variantId, key, value) =>
+  const updateLine = (variantId, key, value) => {
     setLines((current) =>
       current.map((line) => (line.variantId === variantId ? { ...line, [key]: value } : line)),
     );
+    setErrors((current) => {
+      const lineErrors = current.lines[variantId];
+      if (!lineErrors?.[key]) {
+        return current;
+      }
+      return {
+        ...current,
+        lines: { ...current.lines, [variantId]: { ...lineErrors, [key]: undefined } },
+      };
+    });
+  };
 
-  const removeLine = (variantId) =>
+  const removeLine = (variantId) => {
     setLines((current) => current.filter((line) => line.variantId !== variantId));
+    setErrors((current) => {
+      const { [variantId]: removed, ...rest } = current.lines;
+      return { ...current, lines: rest };
+    });
+  };
 
   async function submit(event) {
     event.preventDefault();
-    const problem = validateDraft({ supplierId, lines });
-    if (problem) {
-      setError(problem);
+    const found = validateDraft({ supplierId, lines });
+    setErrors(found);
+    if (hasDraftErrors(found)) {
+      setError(found.form ?? "Please fix the marked fields.");
       return;
     }
 
@@ -96,14 +116,21 @@ export default function PurchaseOrderForm() {
           <select
             id="po-supplier"
             value={supplierId}
-            onChange={(event) => setSupplierId(event.target.value)}
-            className={`mt-1 max-w-sm ${inputClass}`}
+            onChange={(event) => {
+              setSupplierId(event.target.value);
+              setErrors((current) => ({ ...current, supplierId: undefined }));
+            }}
+            className={`mt-1 max-w-sm ${fieldClass(errors.supplierId)}`}
+            {...fieldAria("po-supplier", errors.supplierId)}
           >
             <option value="">Choose a supplier</option>
             {supplierList.map((supplier) => (
               <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
             ))}
           </select>
+        )}
+        {errors.supplierId && (
+          <p id="po-supplier-error" role="alert" className="mt-1 text-xs text-red-700">{errors.supplierId}</p>
         )}
       </div>
 
@@ -155,6 +182,7 @@ export default function PurchaseOrderForm() {
               lines.map((line) => {
                 const qty = /^\d+$/.test(line.qty.trim()) ? Number(line.qty.trim()) : null;
                 const costCents = toCents(line.costPrice || 0);
+                const lineErrors = errors.lines[line.variantId] ?? {};
                 const lineTotal =
                   qty === null || !/^\d+(\.\d{1,2})?$/.test(line.costPrice.trim())
                     ? "—"
@@ -165,25 +193,37 @@ export default function PurchaseOrderForm() {
                       <span className="font-medium text-slate-900">{line.label}</span>
                       <span className="block text-xs text-slate-500">{line.sku}</span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right align-top">
                       <label htmlFor={`qty-${line.variantId}`} className="sr-only">Quantity for {line.label}</label>
                       <input
                         id={`qty-${line.variantId}`}
                         inputMode="numeric"
                         value={line.qty}
                         onChange={(event) => updateLine(line.variantId, "qty", event.target.value)}
-                        className={`${inputClass} w-24 text-right`}
+                        className={`${fieldClass(lineErrors.qty)} w-24 text-right`}
+                        {...fieldAria(`qty-${line.variantId}`, lineErrors.qty)}
                       />
+                      {lineErrors.qty && (
+                        <p id={`qty-${line.variantId}-error`} role="alert" className="mt-1 text-xs text-red-700">
+                          {lineErrors.qty}
+                        </p>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right align-top">
                       <label htmlFor={`cost-${line.variantId}`} className="sr-only">Cost price for {line.label}</label>
                       <input
                         id={`cost-${line.variantId}`}
                         inputMode="decimal"
                         value={line.costPrice}
                         onChange={(event) => updateLine(line.variantId, "costPrice", event.target.value)}
-                        className={`${inputClass} w-28 text-right`}
+                        className={`${fieldClass(lineErrors.costPrice)} w-28 text-right`}
+                        {...fieldAria(`cost-${line.variantId}`, lineErrors.costPrice)}
                       />
+                      {lineErrors.costPrice && (
+                        <p id={`cost-${line.variantId}-error`} role="alert" className="mt-1 text-xs text-red-700">
+                          {lineErrors.costPrice}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums">{lineTotal}</td>
                     <td className="px-4 py-3 text-right">

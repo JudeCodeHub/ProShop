@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import Alert from "@/components/admin/alert";
+import Field from "@/components/admin/field";
 import { api } from "@/lib/api";
 import { formatMoney, parseAmount, toCents } from "@/lib/money";
-import { buttonClass, cardClass, inputClass, tableHeadClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass, tableHeadClass } from "@/lib/ui";
+import { validateVariant } from "@/lib/validation";
 
 const EMPTY_NEW = { size: "", color: "", sellPrice: "", stockQty: "" };
 const cell = "px-3 py-2";
@@ -13,7 +15,9 @@ const compactInput = inputClass.replace("px-3 py-2", "px-2 py-1");
 
 export default function VariantManager({ productId, variants, currency, onChanged }) {
   const [draft, setDraft] = useState(EMPTY_NEW);
+  const [draftErrors, setDraftErrors] = useState({});
   const [editing, setEditing] = useState(null);
+  const [editErrors, setEditErrors] = useState({});
   const [busy, setBusy] = useState(null);
   const [message, setMessage] = useState(null);
 
@@ -35,23 +39,17 @@ export default function VariantManager({ productId, variants, currency, onChange
 
   async function addVariant(event) {
     event.preventDefault();
+    const found = validateVariant(draft, { withStock: true });
+    setDraftErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
+      return;
+    }
+
     const size = draft.size.trim();
     const color = draft.color.trim();
     const price = parseAmount(draft.sellPrice);
     const stock = draft.stockQty.trim() === "" ? 0 : Number(draft.stockQty);
-
-    if (!size || !color || !draft.sellPrice.trim()) {
-      setMessage({ tone: "error", text: "Enter a size, a color and a selling price." });
-      return;
-    }
-    if (price === null) {
-      setMessage({ tone: "error", text: "Selling price must be a number with up to 2 decimals." });
-      return;
-    }
-    if (!Number.isInteger(stock) || stock < 0) {
-      setMessage({ tone: "error", text: "Starting stock must be a whole number of 0 or more." });
-      return;
-    }
 
     const added = await run(
       "add",
@@ -60,17 +58,21 @@ export default function VariantManager({ productId, variants, currency, onChange
     );
     if (added) {
       setDraft(EMPTY_NEW);
+      setDraftErrors({});
     }
   }
 
   async function saveEdit() {
+    const found = validateVariant(editing);
+    setEditErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
+      return;
+    }
+
     const size = editing.size.trim();
     const color = editing.color.trim();
     const price = parseAmount(editing.sellPrice);
-    if (!size || !color || !editing.sellPrice.trim() || price === null) {
-      setMessage({ tone: "error", text: "Enter a size, a color and a selling price with up to 2 decimals." });
-      return;
-    }
     const saved = await run(
       `edit-${editing.id}`,
       () => api.put(`/variants/${editing.id}`, { size, color, sellPrice: price / 100 }),
@@ -78,6 +80,7 @@ export default function VariantManager({ productId, variants, currency, onChange
     );
     if (saved) {
       setEditing(null);
+      setEditErrors({});
     }
   }
 
@@ -89,8 +92,16 @@ export default function VariantManager({ productId, variants, currency, onChange
   }
 
   const disabled = Boolean(busy);
-  const editField = (key) => (event) => setEditing((current) => ({ ...current, [key]: event.target.value }));
-  const draftField = (key) => (event) => setDraft((current) => ({ ...current, [key]: event.target.value }));
+  const editField = (key) => (event) => {
+    const { value } = event.target;
+    setEditing((current) => ({ ...current, [key]: value }));
+    setEditErrors((current) => ({ ...current, [key]: undefined }));
+  };
+  const draftField = (key) => (event) => {
+    const { value } = event.target;
+    setDraft((current) => ({ ...current, [key]: value }));
+    setDraftErrors((current) => ({ ...current, [key]: undefined }));
+  };
 
   return (
     <section className={`space-y-4 p-5 ${cardClass}`} aria-labelledby="variants-title">
@@ -127,22 +138,43 @@ export default function VariantManager({ productId, variants, currency, onChange
               editing?.id === variant.id ? (
                 <tr key={variant.id} className="bg-slate-50">
                   <td className={cell}>
-                    <input aria-label="Size" value={editing.size} onChange={editField("size")} maxLength={20} className={compactInput} />
+                    <input
+                      aria-label="Size"
+                      value={editing.size}
+                      onChange={editField("size")}
+                      maxLength={20}
+                      className={editErrors.size ? `${compactInput} border-red-400` : compactInput}
+                    />
+                    {editErrors.size && <p role="alert" className="mt-1 text-xs text-red-700">{editErrors.size}</p>}
                   </td>
                   <td className={cell}>
-                    <input aria-label="Color" value={editing.color} onChange={editField("color")} maxLength={30} className={compactInput} />
+                    <input
+                      aria-label="Color"
+                      value={editing.color}
+                      onChange={editField("color")}
+                      maxLength={30}
+                      className={editErrors.color ? `${compactInput} border-red-400` : compactInput}
+                    />
+                    {editErrors.color && <p role="alert" className="mt-1 text-xs text-red-700">{editErrors.color}</p>}
                   </td>
                   <td className={`${cell} font-mono text-xs text-slate-500`}>new SKU on save</td>
                   <td className={`${cell} font-mono text-xs text-slate-600`}>{variant.barcode}</td>
                   <td className={cell}>
-                    <input aria-label="Price" inputMode="decimal" value={editing.sellPrice} onChange={editField("sellPrice")} className={`${compactInput} text-right`} />
+                    <input
+                      aria-label="Price"
+                      inputMode="decimal"
+                      value={editing.sellPrice}
+                      onChange={editField("sellPrice")}
+                      className={`${compactInput} text-right ${editErrors.sellPrice ? "border-red-400" : ""}`}
+                    />
+                    {editErrors.sellPrice && <p role="alert" className="mt-1 text-xs text-red-700">{editErrors.sellPrice}</p>}
                   </td>
                   <td className={`${cell} text-right tabular-nums`}>{variant.stockQty}</td>
                   <td className={`${cell} whitespace-nowrap text-right`}>
                     <button type="button" onClick={saveEdit} disabled={disabled} className={`${buttonClass.small} mr-1`}>
                       {busy === `edit-${variant.id}` ? "Saving…" : "Save"}
                     </button>
-                    <button type="button" onClick={() => setEditing(null)} disabled={disabled} className={buttonClass.small}>
+                    <button type="button" onClick={() => { setEditing(null); setEditErrors({}); }} disabled={disabled} className={buttonClass.small}>
                       Cancel
                     </button>
                   </td>
@@ -167,14 +199,15 @@ export default function VariantManager({ productId, variants, currency, onChange
                     <button
                       type="button"
                       disabled={disabled}
-                      onClick={() =>
+                      onClick={() => {
+                        setEditErrors({});
                         setEditing({
                           id: variant.id,
                           size: variant.size,
                           color: variant.color,
                           sellPrice: Number(variant.sellPrice).toFixed(2),
-                        })
-                      }
+                        });
+                      }}
                       className={`${buttonClass.small} mr-1`}
                     >
                       Edit
@@ -190,24 +223,52 @@ export default function VariantManager({ productId, variants, currency, onChange
         </table>
       </div>
 
-      <form onSubmit={addVariant} className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] sm:items-end" noValidate>
-        <div className="space-y-1">
-          <label htmlFor="new-size" className="text-xs font-medium text-slate-600">Size</label>
-          <input id="new-size" value={draft.size} onChange={draftField("size")} maxLength={20} placeholder="42 or M" className={inputClass} />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="new-color" className="text-xs font-medium text-slate-600">Color</label>
-          <input id="new-color" value={draft.color} onChange={draftField("color")} maxLength={30} placeholder="Black" className={inputClass} />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="new-price" className="text-xs font-medium text-slate-600">Selling price</label>
-          <input id="new-price" inputMode="decimal" value={draft.sellPrice} onChange={draftField("sellPrice")} placeholder="0.00" className={inputClass} />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="new-stock" className="text-xs font-medium text-slate-600">Starting stock</label>
-          <input id="new-stock" inputMode="numeric" value={draft.stockQty} onChange={draftField("stockQty")} placeholder="0" className={inputClass} />
-        </div>
-        <button type="submit" disabled={disabled} className={buttonClass.primary}>
+      <form onSubmit={addVariant} className="grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] sm:items-start" noValidate>
+        <Field id="new-size" label="Size" error={draftErrors.size}>
+          <input
+            id="new-size"
+            value={draft.size}
+            onChange={draftField("size")}
+            maxLength={20}
+            placeholder="42 or M"
+            className={fieldClass(draftErrors.size)}
+            {...fieldAria("new-size", draftErrors.size)}
+          />
+        </Field>
+        <Field id="new-color" label="Color" error={draftErrors.color}>
+          <input
+            id="new-color"
+            value={draft.color}
+            onChange={draftField("color")}
+            maxLength={30}
+            placeholder="Black"
+            className={fieldClass(draftErrors.color)}
+            {...fieldAria("new-color", draftErrors.color)}
+          />
+        </Field>
+        <Field id="new-price" label="Selling price" error={draftErrors.sellPrice}>
+          <input
+            id="new-price"
+            inputMode="decimal"
+            value={draft.sellPrice}
+            onChange={draftField("sellPrice")}
+            placeholder="0.00"
+            className={fieldClass(draftErrors.sellPrice)}
+            {...fieldAria("new-price", draftErrors.sellPrice)}
+          />
+        </Field>
+        <Field id="new-stock" label="Starting stock" error={draftErrors.stockQty}>
+          <input
+            id="new-stock"
+            inputMode="numeric"
+            value={draft.stockQty}
+            onChange={draftField("stockQty")}
+            placeholder="0"
+            className={fieldClass(draftErrors.stockQty)}
+            {...fieldAria("new-stock", draftErrors.stockQty)}
+          />
+        </Field>
+        <button type="submit" disabled={disabled} className={`${buttonClass.primary} sm:mt-6`}>
           {busy === "add" ? "Adding…" : "Add variant"}
         </button>
       </form>

@@ -19,3 +19,13 @@ export const cardClass = "rounded-lg bg-white shadow-sm ring-1 ring-slate-200";
 
 export const tableHeadClass =
   "bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500";
+
+export const fieldClass = (error) =>
+  error
+    ? `${inputClass} border-red-400 focus:border-red-500 focus:ring-red-200`
+    : inputClass;
+
+export const fieldAria = (id, error) => ({
+  "aria-invalid": error ? true : undefined,
+  "aria-describedby": error ? `${id}-error` : undefined,
+});

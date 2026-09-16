@@ -9,6 +9,7 @@ export class ProductVariantsController {
   constructor(private readonly variantsService: VariantsService) {}
 
   @Get()
+  @Roles(Role.cashier, Role.admin)
   findAll(@Param('productId', ParseIntPipe) productId: number) {
     return this.variantsService.findByProduct(productId);
   }

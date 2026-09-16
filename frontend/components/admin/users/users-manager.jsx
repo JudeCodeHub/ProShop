@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Alert from "@/components/admin/alert";
+import Field from "@/components/admin/field";
 import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -15,7 +16,7 @@ import {
   validateNewUser,
   validatePassword,
 } from "@/lib/users";
-import { buttonClass, cardClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass, tableHeadClass } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
 
 const EMPTY_FORM = { name: "", email: "", password: "", role: "cashier" };
@@ -28,6 +29,7 @@ export default function UsersManager() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(null);
   const [resetting, setResetting] = useState(null);
+  const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -50,11 +52,18 @@ export default function UsersManager() {
     }
   }
 
+  const setFormField = (key) => (event) => {
+    const { value } = event.target;
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
   async function addUser(event) {
     event.preventDefault();
-    const problem = validateNewUser(form);
-    if (problem) {
-      setMessage({ tone: "error", text: problem });
+    const found = validateNewUser(form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
     if (
@@ -64,6 +73,7 @@ export default function UsersManager() {
       )
     ) {
       setForm(EMPTY_FORM);
+      setErrors({});
       setAdding(false);
     }
   }
@@ -72,7 +82,8 @@ export default function UsersManager() {
     event.preventDefault();
     const name = editing.name.trim();
     if (!name) {
-      setMessage({ tone: "error", text: "Enter a name." });
+      setErrors({ editName: "Enter a name." });
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
     if (await run(() => api.put(`/users/${editing.id}`, { name, role: editing.role }), `Saved ${name}.`)) {
@@ -84,7 +95,8 @@ export default function UsersManager() {
     event.preventDefault();
     const problem = validatePassword(resetting.password);
     if (problem) {
-      setMessage({ tone: "error", text: problem });
+      setErrors({ resetPassword: problem });
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
     if (
@@ -126,6 +138,7 @@ export default function UsersManager() {
             onClick={() => {
               setAdding((open) => !open);
               setForm(EMPTY_FORM);
+              setErrors({});
               setEditing(null);
               setResetting(null);
             }}
@@ -138,53 +151,57 @@ export default function UsersManager() {
 
       {adding && (
         <form onSubmit={addUser} className={`mb-4 grid gap-3 p-4 sm:grid-cols-2 ${cardClass}`} noValidate>
-          <div>
-            <label htmlFor="user-name" className={labelClass}>Name</label>
+          <Field id="user-name" label="Name" error={errors.name}>
             <input
               id="user-name"
               value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              onChange={setFormField("name")}
               maxLength={100}
               autoFocus
-              className={`mt-1 ${inputClass}`}
+              className={fieldClass(errors.name)}
+              {...fieldAria("user-name", errors.name)}
             />
-          </div>
-          <div>
-            <label htmlFor="user-email" className={labelClass}>Email</label>
+          </Field>
+          <Field id="user-email" label="Email" error={errors.email}>
             <input
               id="user-email"
               type="email"
               value={form.email}
-              onChange={(event) => setForm({ ...form, email: event.target.value })}
+              onChange={setFormField("email")}
               maxLength={254}
-              className={`mt-1 ${inputClass}`}
+              className={fieldClass(errors.email)}
+              {...fieldAria("user-email", errors.email)}
             />
-          </div>
-          <div>
-            <label htmlFor="user-password" className={labelClass}>Password</label>
+          </Field>
+          <Field
+            id="user-password"
+            label="Password"
+            error={errors.password}
+            hint="At least 8 characters. Share it with the staff member."
+          >
             <input
               id="user-password"
               type="password"
               value={form.password}
-              onChange={(event) => setForm({ ...form, password: event.target.value })}
+              onChange={setFormField("password")}
               maxLength={72}
-              className={`mt-1 ${inputClass}`}
+              className={fieldClass(errors.password)}
+              {...fieldAria("user-password", errors.password)}
             />
-            <p className="mt-1 text-xs text-slate-500">At least 8 characters. Share it with the staff member.</p>
-          </div>
-          <div>
-            <label htmlFor="user-role" className={labelClass}>Role</label>
+          </Field>
+          <Field id="user-role" label="Role" error={errors.role}>
             <select
               id="user-role"
               value={form.role}
-              onChange={(event) => setForm({ ...form, role: event.target.value })}
-              className={`mt-1 ${inputClass}`}
+              onChange={setFormField("role")}
+              className={fieldClass(errors.role)}
+              {...fieldAria("user-role", errors.role)}
             >
               {ROLES.map((role) => (
                 <option key={role} value={role}>{ROLE_LABELS[role]}</option>
               ))}
             </select>
-          </div>
+          </Field>
           <div className="sm:col-span-2">
             <button type="submit" disabled={busy} className={buttonClass.primary}>Create user</button>
           </div>
@@ -227,24 +244,39 @@ export default function UsersManager() {
                   user={user}
                   isSelf={user.id === currentUser?.id}
                   busy={busy}
+                  errors={errors}
                   editing={editing?.id === user.id ? editing : null}
                   resetting={resetting?.id === user.id ? resetting : null}
                   onEdit={() => {
                     setResetting(null);
                     setMessage(null);
+                    setErrors({});
                     setEditing({ id: user.id, name: user.name, role: user.role });
                   }}
-                  onEditChange={(changes) => setEditing((current) => ({ ...current, ...changes }))}
+                  onEditChange={(changes) => {
+                    setErrors((current) => ({ ...current, editName: undefined }));
+                    setEditing((current) => ({ ...current, ...changes }));
+                  }}
                   onEditSave={saveEdit}
-                  onEditCancel={() => setEditing(null)}
+                  onEditCancel={() => {
+                    setEditing(null);
+                    setErrors({});
+                  }}
                   onResetStart={() => {
                     setEditing(null);
                     setMessage(null);
+                    setErrors({});
                     setResetting({ id: user.id, name: user.name, password: "" });
                   }}
-                  onResetChange={(password) => setResetting((current) => ({ ...current, password }))}
+                  onResetChange={(password) => {
+                    setErrors((current) => ({ ...current, resetPassword: undefined }));
+                    setResetting((current) => ({ ...current, password }));
+                  }}
                   onResetSave={savePassword}
-                  onResetCancel={() => setResetting(null)}
+                  onResetCancel={() => {
+                    setResetting(null);
+                    setErrors({});
+                  }}
                   onToggleActive={() => toggleActive(user)}
                 />
               ))
@@ -260,6 +292,7 @@ function UserRow({
   user,
   isSelf,
   busy,
+  errors,
   editing,
   resetting,
   onEdit,
@@ -312,30 +345,29 @@ function UserRow({
         <tr className="bg-slate-50">
           <td colSpan={6} className="px-4 py-3">
             <form onSubmit={onEditSave} className="flex flex-wrap items-end gap-2" noValidate>
-              <div className="min-w-48 flex-1">
-                <label htmlFor={`edit-name-${user.id}`} className={labelClass}>Name</label>
+              <Field id={`edit-name-${user.id}`} label="Name" error={errors.editName} className="min-w-48 flex-1">
                 <input
                   id={`edit-name-${user.id}`}
                   value={editing.name}
                   onChange={(event) => onEditChange({ name: event.target.value })}
                   maxLength={100}
                   autoFocus
-                  className={`mt-1 ${inputClass}`}
+                  className={fieldClass(errors.editName)}
+                  {...fieldAria(`edit-name-${user.id}`, errors.editName)}
                 />
-              </div>
-              <div>
-                <label htmlFor={`edit-role-${user.id}`} className={labelClass}>Role</label>
+              </Field>
+              <Field id={`edit-role-${user.id}`} label="Role">
                 <select
                   id={`edit-role-${user.id}`}
                   value={editing.role}
                   onChange={(event) => onEditChange({ role: event.target.value })}
-                  className={`mt-1 ${inputClass}`}
+                  className={inputClass}
                 >
                   {ROLES.map((role) => (
                     <option key={role} value={role}>{ROLE_LABELS[role]}</option>
                   ))}
                 </select>
-              </div>
+              </Field>
               <button type="submit" disabled={busy} className={buttonClass.primary}>Save</button>
               <button type="button" onClick={onEditCancel} disabled={busy} className={buttonClass.secondary}>Cancel</button>
             </form>
@@ -346,8 +378,13 @@ function UserRow({
         <tr className="bg-amber-50">
           <td colSpan={6} className="px-4 py-3">
             <form onSubmit={onResetSave} className="flex flex-wrap items-end gap-2" noValidate>
-              <div className="min-w-48 flex-1">
-                <label htmlFor={`reset-${user.id}`} className={labelClass}>New password for {user.name}</label>
+              <Field
+                id={`reset-${user.id}`}
+                label={`New password for ${user.name}`}
+                error={errors.resetPassword}
+                hint="At least 8 characters."
+                className="min-w-48 flex-1"
+              >
                 <input
                   id={`reset-${user.id}`}
                   type="password"
@@ -355,9 +392,10 @@ function UserRow({
                   onChange={(event) => onResetChange(event.target.value)}
                   maxLength={72}
                   autoFocus
-                  className={`mt-1 ${inputClass}`}
+                  className={fieldClass(errors.resetPassword)}
+                  {...fieldAria(`reset-${user.id}`, errors.resetPassword)}
                 />
-              </div>
+              </Field>
               <button type="submit" disabled={busy} className={buttonClass.primary}>Set password</button>
               <button type="button" onClick={onResetCancel} disabled={busy} className={buttonClass.secondary}>Cancel</button>
             </form>

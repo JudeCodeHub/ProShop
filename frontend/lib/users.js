@@ -1,3 +1,5 @@
+import { textError } from "./validation.js";
+
 export const ROLES = ["cashier", "admin"];
 
 export const ROLE_LABELS = { admin: "Admin", cashier: "Cashier" };
@@ -16,20 +18,22 @@ export function validatePassword(password) {
 }
 
 export function validateNewUser({ name = "", email = "", password = "", role = "" } = {}) {
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    return "Enter a name.";
-  }
-  if (trimmedName.length > 100) {
-    return "A name can be at most 100 characters.";
+  const errors = {};
+  const nameProblem = textError(name, { label: "a name", max: 100 });
+  if (nameProblem) {
+    errors.name = nameProblem;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-    return "Enter a valid email address.";
+    errors.email = "Enter a valid email address.";
   }
   if (!ROLES.includes(role)) {
-    return "Choose a role.";
+    errors.role = "Choose a role.";
   }
-  return validatePassword(password);
+  const passwordProblem = validatePassword(password);
+  if (passwordProblem) {
+    errors.password = passwordProblem;
+  }
+  return errors;
 }
 
 export const newUserBody = ({ name, email, password, role }) => ({

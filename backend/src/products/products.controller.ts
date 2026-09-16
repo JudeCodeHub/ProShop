@@ -49,11 +49,13 @@ export class ProductsController {
   }
 
   @Get()
+  @Roles(Role.cashier, Role.admin)
   findAll(@Query() query: ListProductsQueryDto) {
     return this.productsService.findAll(query);
   }
 
   @Get(':id')
+  @Roles(Role.cashier, Role.admin)
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.findOne(id);
   }

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import Alert from "@/components/admin/alert";
+import Field from "@/components/admin/field";
 import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { filterSuppliers, supplierBody, validateSupplier } from "@/lib/suppliers";
-import { buttonClass, cardClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass, tableHeadClass } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
 
 const EMPTY_FORM = { name: "", contactInfo: "" };
@@ -17,6 +18,7 @@ export default function SuppliersManager() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(null);
+  const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -39,11 +41,24 @@ export default function SuppliersManager() {
     }
   }
 
+  const setFormField = (key) => (event) => {
+    const { value } = event.target;
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  const setEditingField = (key) => (event) => {
+    const { value } = event.target;
+    setEditing((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
   async function addSupplier(event) {
     event.preventDefault();
-    const problem = validateSupplier(form);
-    if (problem) {
-      setMessage({ tone: "error", text: problem });
+    const found = validateSupplier(form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
     if (await run(() => api.post("/suppliers", supplierBody(form)), `Added "${form.name.trim()}".`)) {
@@ -54,9 +69,10 @@ export default function SuppliersManager() {
 
   async function saveEdit(event) {
     event.preventDefault();
-    const problem = validateSupplier(editing);
-    if (problem) {
-      setMessage({ tone: "error", text: problem });
+    const found = validateSupplier(editing);
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
     if (
@@ -95,6 +111,7 @@ export default function SuppliersManager() {
               setAdding((open) => !open);
               setForm(EMPTY_FORM);
               setEditing(null);
+              setErrors({});
             }}
             className={buttonClass.primary}
           >
@@ -105,28 +122,28 @@ export default function SuppliersManager() {
 
       {adding && (
         <form onSubmit={addSupplier} className={`mb-4 grid gap-3 p-4 sm:grid-cols-2 ${cardClass}`} noValidate>
-          <div>
-            <label htmlFor="supplier-name" className={labelClass}>Name</label>
+          <Field id="supplier-name" label="Name" error={errors.name}>
             <input
               id="supplier-name"
               value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              onChange={setFormField("name")}
               maxLength={100}
               autoFocus
-              className={`mt-1 ${inputClass}`}
+              className={fieldClass(errors.name)}
+              {...fieldAria("supplier-name", errors.name)}
             />
-          </div>
-          <div>
-            <label htmlFor="supplier-contact" className={labelClass}>Contact details</label>
+          </Field>
+          <Field id="supplier-contact" label="Contact details" optional error={errors.contactInfo}>
             <input
               id="supplier-contact"
               value={form.contactInfo}
-              onChange={(event) => setForm({ ...form, contactInfo: event.target.value })}
+              onChange={setFormField("contactInfo")}
               maxLength={500}
               placeholder="Phone, email or address"
-              className={`mt-1 ${inputClass}`}
+              className={fieldClass(errors.contactInfo)}
+              {...fieldAria("supplier-contact", errors.contactInfo)}
             />
-          </div>
+          </Field>
           <div className="sm:col-span-2">
             <button type="submit" disabled={busy} className={buttonClass.primary}>Save supplier</button>
           </div>
@@ -170,29 +187,40 @@ export default function SuppliersManager() {
                   <tr key={supplier.id} className="bg-slate-50">
                     <td colSpan={4} className="px-4 py-3">
                       <form onSubmit={saveEdit} className="flex flex-wrap items-end gap-2" noValidate>
-                        <div className="min-w-48 flex-1">
-                          <label htmlFor={`edit-name-${supplier.id}`} className={labelClass}>Name</label>
+                        <Field
+                          id={`edit-name-${supplier.id}`}
+                          label="Name"
+                          error={errors.name}
+                          className="min-w-48 flex-1"
+                        >
                           <input
                             id={`edit-name-${supplier.id}`}
                             value={editing.name}
-                            onChange={(event) => setEditing({ ...editing, name: event.target.value })}
+                            onChange={setEditingField("name")}
                             maxLength={100}
                             autoFocus
-                            className={`mt-1 ${inputClass}`}
+                            className={fieldClass(errors.name)}
+                            {...fieldAria(`edit-name-${supplier.id}`, errors.name)}
                           />
-                        </div>
-                        <div className="min-w-48 flex-1">
-                          <label htmlFor={`edit-contact-${supplier.id}`} className={labelClass}>Contact details</label>
+                        </Field>
+                        <Field
+                          id={`edit-contact-${supplier.id}`}
+                          label="Contact details"
+                          optional
+                          error={errors.contactInfo}
+                          className="min-w-48 flex-1"
+                        >
                           <input
                             id={`edit-contact-${supplier.id}`}
                             value={editing.contactInfo}
-                            onChange={(event) => setEditing({ ...editing, contactInfo: event.target.value })}
+                            onChange={setEditingField("contactInfo")}
                             maxLength={500}
-                            className={`mt-1 ${inputClass}`}
+                            className={fieldClass(errors.contactInfo)}
+                            {...fieldAria(`edit-contact-${supplier.id}`, errors.contactInfo)}
                           />
-                        </div>
+                        </Field>
                         <button type="submit" disabled={busy} className={buttonClass.primary}>Save</button>
-                        <button type="button" onClick={() => setEditing(null)} disabled={busy} className={buttonClass.secondary}>
+                        <button type="button" onClick={() => { setEditing(null); setErrors({}); }} disabled={busy} className={buttonClass.secondary}>
                           Cancel
                         </button>
                       </form>
@@ -217,6 +245,7 @@ export default function SuppliersManager() {
                         onClick={() => {
                           setAdding(false);
                           setMessage(null);
+                          setErrors({});
                           setEditing({ id: supplier.id, name: supplier.name, contactInfo: supplier.contactInfo ?? "" });
                         }}
                         disabled={busy}

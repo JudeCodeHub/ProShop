@@ -22,6 +22,7 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
+  @Roles(Role.cashier, Role.admin)
   findAll() {
     return this.categoriesService.findAll();
   }

@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/dates";
 import { formatMoney, toCents } from "@/lib/money";
 import { parseOrderRef } from "@/lib/orders";
 import { returnableQty, summarizeQuotes } from "@/lib/returns";
-import { buttonClass, cardClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
 
 const compactInput = inputClass.replace("px-3 py-2", "px-2 py-1");
@@ -28,12 +28,15 @@ function lineLabel(item) {
   return `${item.productName} (${item.size} / ${item.color})`;
 }
 
+const REASON_REQUIRED = "Enter a reason for the return.";
+
 export default function ReturnsWorkbench({ initialOrderId }) {
   const [orderInput, setOrderInput] = useState(initialOrderId ? String(initialOrderId) : "");
   const [orderId, setOrderId] = useState(initialOrderId ?? null);
   const [lookupError, setLookupError] = useState("");
   const [selections, setSelections] = useState({});
   const [reason, setReason] = useState("");
+  const [reasonError, setReasonError] = useState("");
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -103,7 +106,7 @@ export default function ReturnsWorkbench({ initialOrderId }) {
       }
     }
     if (lines.some(({ choice }) => choice.mode === "return") && !reason.trim()) {
-      return "Enter a reason for the return.";
+      return REASON_REQUIRED;
     }
     return "";
   }
@@ -121,6 +124,7 @@ export default function ReturnsWorkbench({ initialOrderId }) {
 
   async function runPreview() {
     const problem = validationError();
+    setReasonError(problem === REASON_REQUIRED ? problem : "");
     if (problem) {
       setMessage({ tone: "error", text: problem });
       return;
@@ -142,6 +146,7 @@ export default function ReturnsWorkbench({ initialOrderId }) {
   }
 
   async function confirm() {
+    setReasonError("");
     setConfirming(true);
     setMessage(null);
     const outcomes = [];
@@ -322,10 +327,17 @@ export default function ReturnsWorkbench({ initialOrderId }) {
                     value={reason}
                     maxLength={200}
                     disabled={confirming}
-                    onChange={(event) => setReason(event.target.value)}
+                    onChange={(event) => {
+                      setReason(event.target.value);
+                      setReasonError("");
+                    }}
                     placeholder="Wrong size, faulty, changed mind…"
-                    className={inputClass}
+                    className={fieldClass(reasonError)}
+                    {...fieldAria("return-reason", reasonError)}
                   />
+                  {reasonError && (
+                    <p id="return-reason-error" role="alert" className="text-xs text-red-700">{reasonError}</p>
+                  )}
                 </div>
                 <button type="button" onClick={runPreview} disabled={previewing || confirming || lines.length === 0} className={buttonClass.secondary}>
                   {previewing ? "Calculating…" : "Preview amounts"}

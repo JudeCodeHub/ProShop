@@ -6,7 +6,9 @@ import Alert from "@/components/admin/alert";
 import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/dates";
-import { buttonClass, cardClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
+import Field from "@/components/admin/field";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass, labelClass, tableHeadClass } from "@/lib/ui";
+import { validateAdjustment } from "@/lib/validation";
 import { useApi } from "@/lib/use-api";
 
 const REASONS = ["Received stock", "Damaged", "Miscount", "Theft", "Returned to supplier", "Other"];
@@ -33,6 +35,7 @@ export default function StockAdjustments({ initialBarcode }) {
   const [search, setSearch] = useState({ term: "", items: [], error: "" });
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -87,6 +90,7 @@ export default function StockAdjustments({ initialBarcode }) {
     setSelected(variant);
     setQuery("");
     setForm(EMPTY_FORM);
+    setErrors({});
     setMessage(null);
   }
 
@@ -98,16 +102,10 @@ export default function StockAdjustments({ initialBarcode }) {
   async function submit(event) {
     event.preventDefault();
     const reason = form.reason === "Other" ? form.otherReason.trim() : form.reason;
-    if (!qtyValid) {
-      setMessage({ tone: "error", text: "Enter a whole number of 1 or more." });
-      return;
-    }
-    if (!reason) {
-      setMessage({ tone: "error", text: "Enter a reason for the change." });
-      return;
-    }
-    if (newStock < 0) {
-      setMessage({ tone: "error", text: `You can remove at most ${selected.stockQty}.` });
+    const found = validateAdjustment({ ...form, stockQty: selected.stockQty });
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
 
@@ -117,6 +115,7 @@ export default function StockAdjustments({ initialBarcode }) {
       const { variant } = await api.post(`/variants/${selected.id}/adjust-stock`, { qtyChange: change, reason });
       setSelected((current) => ({ ...current, stockQty: variant.stockQty }));
       setForm((current) => ({ ...current, qty: "", otherReason: "" }));
+      setErrors({});
       setMessage({ tone: "success", text: `Stock for ${label(selected)} is now ${variant.stockQty}.` });
       history.reload();
     } catch (error) {
@@ -126,7 +125,11 @@ export default function StockAdjustments({ initialBarcode }) {
     }
   }
 
-  const setField = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const setField = (key) => (event) => {
+    const { value } = event.target;
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key === "otherReason" ? "reason" : key]: undefined }));
+  };
 
   return (
     <div className="space-y-6">
@@ -228,25 +231,37 @@ export default function StockAdjustments({ initialBarcode }) {
               </fieldset>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label htmlFor="adjust-qty" className={labelClass}>Quantity</label>
-                  <input id="adjust-qty" inputMode="numeric" value={form.qty} onChange={setField("qty")} placeholder="1" className={inputClass} />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="adjust-reason" className={labelClass}>Reason</label>
+                <Field id="adjust-qty" label="Quantity" error={errors.qty}>
+                  <input
+                    id="adjust-qty"
+                    inputMode="numeric"
+                    value={form.qty}
+                    onChange={setField("qty")}
+                    placeholder="1"
+                    className={fieldClass(errors.qty)}
+                    {...fieldAria("adjust-qty", errors.qty)}
+                  />
+                </Field>
+                <Field id="adjust-reason" label="Reason" error={form.reason === "Other" ? undefined : errors.reason}>
                   <select id="adjust-reason" value={form.reason} onChange={setField("reason")} className={inputClass}>
                     {REASONS.map((reason) => (
                       <option key={reason} value={reason}>{reason}</option>
                     ))}
                   </select>
-                </div>
+                </Field>
               </div>
 
               {form.reason === "Other" && (
-                <div className="space-y-1">
-                  <label htmlFor="adjust-other" className={labelClass}>Describe the reason</label>
-                  <input id="adjust-other" value={form.otherReason} onChange={setField("otherReason")} maxLength={200} className={inputClass} />
-                </div>
+                <Field id="adjust-other" label="Describe the reason" error={errors.reason}>
+                  <input
+                    id="adjust-other"
+                    value={form.otherReason}
+                    onChange={setField("otherReason")}
+                    maxLength={200}
+                    className={fieldClass(errors.reason)}
+                    {...fieldAria("adjust-other", errors.reason)}
+                  />
+                </Field>
               )}
 
               {newStock !== null && (
@@ -261,7 +276,7 @@ export default function StockAdjustments({ initialBarcode }) {
                 <button type="submit" disabled={saving || newStock === null || newStock < 0} className={buttonClass.primary}>
                   {saving ? "Saving…" : "Save adjustment"}
                 </button>
-                <button type="button" onClick={() => setSelected(null)} disabled={saving} className={buttonClass.secondary}>
+                <button type="button" onClick={() => { setSelected(null); setErrors({}); }} disabled={saving} className={buttonClass.secondary}>
                   Choose another item
                 </button>
               </div>

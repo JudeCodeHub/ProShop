@@ -7,10 +7,12 @@ import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { buttonClass, cardClass, inputClass, tableHeadClass } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
+import { textError } from "@/lib/validation";
 
 export default function CategoriesManager() {
   const categories = useApi("/categories");
   const [newName, setNewName] = useState("");
+  const [nameError, setNameError] = useState("");
   const [editing, setEditing] = useState(null);
   const [moving, setMoving] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -37,8 +39,9 @@ export default function CategoriesManager() {
   async function addCategory(event) {
     event.preventDefault();
     const name = newName.trim();
-    if (!name) {
-      setMessage({ tone: "error", text: "Enter a category name." });
+    const problem = textError(newName, { label: "a category name", max: 60 });
+    setNameError(problem);
+    if (problem) {
       return;
     }
     if (await run(() => api.post("/categories", { name }), `Added "${name}".`)) {
@@ -49,8 +52,9 @@ export default function CategoriesManager() {
   async function saveRename(event) {
     event.preventDefault();
     const name = editing.name.trim();
-    if (!name) {
-      setMessage({ tone: "error", text: "A category name cannot be empty." });
+    const problem = textError(editing.name, { label: "a category name", max: 60 });
+    if (problem) {
+      setEditing((current) => ({ ...current, error: problem }));
       return;
     }
     if (await run(() => api.put(`/categories/${editing.id}`, { name }), `Renamed to "${name}".`)) {
@@ -90,19 +94,27 @@ export default function CategoriesManager() {
     <div className="max-w-3xl">
       <PageHeader title="Categories" description="Group products into categories like Footwear, Apparel or Equipment." />
 
-      <form onSubmit={addCategory} className="mb-4 flex gap-2" noValidate>
-        <label htmlFor="new-category" className="sr-only">New category name</label>
-        <input
-          id="new-category"
-          value={newName}
-          onChange={(event) => setNewName(event.target.value)}
-          maxLength={60}
-          placeholder="New category name"
-          className={inputClass}
-        />
-        <button type="submit" disabled={busy} className={`${buttonClass.primary} shrink-0`}>
-          Add category
-        </button>
+      <form onSubmit={addCategory} className="mb-4" noValidate>
+        <div className="flex gap-2">
+          <label htmlFor="new-category" className="sr-only">New category name</label>
+          <input
+            id="new-category"
+            value={newName}
+            onChange={(event) => {
+              setNewName(event.target.value);
+              setNameError("");
+            }}
+            maxLength={60}
+            placeholder="New category name"
+            aria-invalid={nameError ? true : undefined}
+            aria-describedby={nameError ? "new-category-error" : undefined}
+            className={nameError ? `${inputClass} border-red-400` : inputClass}
+          />
+          <button type="submit" disabled={busy} className={`${buttonClass.primary} shrink-0`}>
+            Add category
+          </button>
+        </div>
+        {nameError && <p id="new-category-error" role="alert" className="mt-1 text-xs text-red-700">{nameError}</p>}
       </form>
 
       {message && <Alert tone={message.tone} className="mb-4">{message.text}</Alert>}
@@ -135,7 +147,7 @@ export default function CategoriesManager() {
                     setMoving(null);
                     setEditing({ id: category.id, name: category.name });
                   }}
-                  onEditChange={(name) => setEditing((current) => ({ ...current, name }))}
+                  onEditChange={(name) => setEditing((current) => ({ ...current, name, error: "" }))}
                   onEditSave={saveRename}
                   onEditCancel={() => setEditing(null)}
                   onDelete={() => startDelete(category)}
@@ -172,18 +184,25 @@ function CategoryRow({
       <tr>
         <td className="px-4 py-3">
           {editing ? (
-            <form onSubmit={onEditSave} className="flex gap-2" noValidate>
-              <label htmlFor={`rename-${category.id}`} className="sr-only">Category name</label>
-              <input
-                id={`rename-${category.id}`}
-                value={editing.name}
-                onChange={(event) => onEditChange(event.target.value)}
-                maxLength={60}
-                autoFocus
-                className={inputClass.replace("px-3 py-2", "px-2 py-1")}
-              />
-              <button type="submit" disabled={busy} className={buttonClass.small}>Save</button>
-              <button type="button" onClick={onEditCancel} disabled={busy} className={buttonClass.small}>Cancel</button>
+            <form onSubmit={onEditSave} noValidate>
+              <div className="flex gap-2">
+                <label htmlFor={`rename-${category.id}`} className="sr-only">Category name</label>
+                <input
+                  id={`rename-${category.id}`}
+                  value={editing.name}
+                  onChange={(event) => onEditChange(event.target.value)}
+                  maxLength={60}
+                  autoFocus
+                  aria-invalid={editing.error ? true : undefined}
+                  aria-describedby={editing.error ? `rename-${category.id}-error` : undefined}
+                  className={`${inputClass.replace("px-3 py-2", "px-2 py-1")} ${editing.error ? "border-red-400" : ""}`}
+                />
+                <button type="submit" disabled={busy} className={buttonClass.small}>Save</button>
+                <button type="button" onClick={onEditCancel} disabled={busy} className={buttonClass.small}>Cancel</button>
+              </div>
+              {editing.error && (
+                <p id={`rename-${category.id}-error`} role="alert" className="mt-1 text-xs text-red-700">{editing.error}</p>
+              )}
             </form>
           ) : (
             <span className="font-medium text-slate-900">{category.name}</span>

@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Alert from "@/components/admin/alert";
+import Field from "@/components/admin/field";
 import { api } from "@/lib/api";
 import { parseAmount } from "@/lib/money";
-import { buttonClass, cardClass, inputClass, labelClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass } from "@/lib/ui";
+import { validateProduct } from "@/lib/validation";
 
 const toValues = (product) => ({
   name: product?.name ?? "",
@@ -18,20 +20,22 @@ export default function ProductForm({ product, categories, onSaved }) {
   const router = useRouter();
   const isNew = !product;
   const [values, setValues] = useState(() => toValues(product));
+  const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(null);
   const [message, setMessage] = useState(null);
 
-  const change = (key) => (event) => setValues((current) => ({ ...current, [key]: event.target.value }));
+  const change = (key) => (event) => {
+    const { value } = event.target;
+    setValues((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (!values.name.trim() || !values.categoryId || !values.brand.trim() || !values.costPrice.trim()) {
-      setMessage({ tone: "error", text: "Fill in the name, category, brand and cost price." });
-      return;
-    }
-    const cost = parseAmount(values.costPrice);
-    if (cost === null) {
-      setMessage({ tone: "error", text: "Cost price must be a number with up to 2 decimals." });
+    const found = validateProduct(values);
+    setErrors(found);
+    if (Object.keys(found).length > 0) {
+      setMessage({ tone: "error", text: "Please fix the marked fields." });
       return;
     }
 
@@ -41,7 +45,7 @@ export default function ProductForm({ product, categories, onSaved }) {
       name: values.name,
       categoryId: Number(values.categoryId),
       brand: values.brand,
-      costPrice: cost / 100,
+      costPrice: parseAmount(values.costPrice) / 100,
     };
 
     try {
@@ -81,13 +85,24 @@ export default function ProductForm({ product, categories, onSaved }) {
       {message && <Alert tone={message.tone}>{message.text}</Alert>}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1 sm:col-span-2">
-          <label htmlFor="product-name" className={labelClass}>Name</label>
-          <input id="product-name" value={values.name} onChange={change("name")} maxLength={150} className={inputClass} />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="product-category" className={labelClass}>Category</label>
-          <select id="product-category" value={values.categoryId} onChange={change("categoryId")} className={inputClass}>
+        <Field id="product-name" label="Name" error={errors.name} className="sm:col-span-2">
+          <input
+            id="product-name"
+            value={values.name}
+            onChange={change("name")}
+            maxLength={150}
+            className={fieldClass(errors.name)}
+            {...fieldAria("product-name", errors.name)}
+          />
+        </Field>
+        <Field id="product-category" label="Category" error={errors.categoryId}>
+          <select
+            id="product-category"
+            value={values.categoryId}
+            onChange={change("categoryId")}
+            className={fieldClass(errors.categoryId)}
+            {...fieldAria("product-category", errors.categoryId)}
+          >
             <option value="">Choose a category</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
@@ -95,23 +110,33 @@ export default function ProductForm({ product, categories, onSaved }) {
               </option>
             ))}
           </select>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="product-brand" className={labelClass}>Brand</label>
-          <input id="product-brand" value={values.brand} onChange={change("brand")} maxLength={100} className={inputClass} />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="product-cost" className={labelClass}>Cost price</label>
+        </Field>
+        <Field id="product-brand" label="Brand" error={errors.brand}>
+          <input
+            id="product-brand"
+            value={values.brand}
+            onChange={change("brand")}
+            maxLength={100}
+            className={fieldClass(errors.brand)}
+            {...fieldAria("product-brand", errors.brand)}
+          />
+        </Field>
+        <Field
+          id="product-cost"
+          label="Cost price"
+          error={errors.costPrice}
+          hint="What the shop pays per unit. Used for profit reports."
+        >
           <input
             id="product-cost"
             inputMode="decimal"
             placeholder="0.00"
             value={values.costPrice}
             onChange={change("costPrice")}
-            className={inputClass}
+            className={fieldClass(errors.costPrice)}
+            {...fieldAria("product-cost", errors.costPrice)}
           />
-          <p className="text-xs text-slate-500">What the shop pays per unit. Used for profit reports.</p>
-        </div>
+        </Field>
       </div>
 
       <div className="flex flex-wrap justify-between gap-2 pt-2">

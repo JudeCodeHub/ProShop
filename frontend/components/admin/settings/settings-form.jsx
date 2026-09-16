@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import Alert from "@/components/admin/alert";
+import Field from "@/components/admin/field";
 import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { settingsBody, settingsForm, validateSettings } from "@/lib/settings-form";
-import { buttonClass, cardClass, inputClass, labelClass } from "@/lib/ui";
+import { buttonClass, cardClass, fieldAria, fieldClass, inputClass } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
 
 const FIELDS = [
   { key: "storeName", label: "Store name", maxLength: 100, hint: "Shown at the top of every receipt." },
-  { key: "address", label: "Address", maxLength: 300, hint: "Printed under the store name." },
-  { key: "logoUrl", label: "Logo link", maxLength: 500, hint: "Optional. A full link starting with https://" },
+  { key: "address", label: "Address", maxLength: 300, hint: "Printed under the store name.", optional: true },
+  { key: "logoUrl", label: "Logo link", maxLength: 500, hint: "A full link starting with https://", optional: true },
 ];
 
 export default function SettingsForm() {
@@ -66,72 +67,70 @@ export default function SettingsForm() {
       ) : (
         <form onSubmit={save} className={`grid gap-4 p-4 ${cardClass}`} noValidate>
           {FIELDS.map((field) => (
-            <div key={field.key}>
-              <label htmlFor={field.key} className={labelClass}>{field.label}</label>
+            <Field
+              key={field.key}
+              id={field.key}
+              label={field.label}
+              error={errors[field.key]}
+              hint={field.hint}
+              optional={field.optional}
+            >
               <input
                 id={field.key}
                 value={form[field.key]}
                 onChange={setField(field.key)}
                 maxLength={field.maxLength}
-                className={`mt-1 ${inputClass}`}
+                className={fieldClass(errors[field.key])}
+                {...fieldAria(field.key, errors[field.key])}
               />
-              {errors[field.key] ? (
-                <p className="mt-1 text-xs text-red-700">{errors[field.key]}</p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-500">{field.hint}</p>
-              )}
-            </div>
+            </Field>
           ))}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="taxRate" className={labelClass}>Tax rate (%)</label>
+            <Field
+              id="taxRate"
+              label="Tax rate (%)"
+              error={errors.taxRate}
+              hint="Added on top of the price after any discount."
+            >
               <input
                 id="taxRate"
                 inputMode="decimal"
                 value={form.taxRate}
                 onChange={setField("taxRate")}
-                className={`mt-1 ${inputClass}`}
+                className={fieldClass(errors.taxRate)}
+                {...fieldAria("taxRate", errors.taxRate)}
               />
-              {errors.taxRate ? (
-                <p className="mt-1 text-xs text-red-700">{errors.taxRate}</p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-500">Added on top of the price after any discount.</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="currency" className={labelClass}>Currency</label>
+            </Field>
+            <Field id="currency" label="Currency" error={errors.currency} hint="A 3 letter code, for example LKR.">
               <input
                 id="currency"
                 value={form.currency}
                 onChange={setField("currency")}
                 maxLength={3}
-                className={`mt-1 uppercase ${inputClass}`}
+                className={`uppercase ${fieldClass(errors.currency)}`}
+                {...fieldAria("currency", errors.currency)}
               />
-              {errors.currency ? (
-                <p className="mt-1 text-xs text-red-700">{errors.currency}</p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-500">A 3 letter code, for example LKR.</p>
-              )}
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label htmlFor="receiptFooterText" className={labelClass}>Receipt footer</label>
+          <Field
+            id="receiptFooterText"
+            label="Receipt footer"
+            optional
+            error={errors.receiptFooterText}
+            hint="The last line on a receipt, such as your return policy."
+          >
             <textarea
               id="receiptFooterText"
               value={form.receiptFooterText}
               onChange={setField("receiptFooterText")}
               maxLength={300}
               rows={3}
-              className={`mt-1 ${inputClass}`}
+              className={fieldClass(errors.receiptFooterText)}
+              {...fieldAria("receiptFooterText", errors.receiptFooterText)}
             />
-            {errors.receiptFooterText ? (
-              <p className="mt-1 text-xs text-red-700">{errors.receiptFooterText}</p>
-            ) : (
-              <p className="mt-1 text-xs text-slate-500">The last line on a receipt, such as your return policy.</p>
-            )}
-          </div>
+          </Field>
 
           <div>
             <button type="submit" disabled={saving} className={buttonClass.primary}>

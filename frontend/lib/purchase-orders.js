@@ -1,7 +1,5 @@
 import { parseAmount, toCents } from "./money.js";
 
-export const PO_STATUS_LABELS = { pending: "Pending", received: "Received" };
-
 export const MAX_LINE_QTY = 100000;
 export const MAX_LINES = 200;
 
@@ -75,33 +73,38 @@ export function draftTotals(lines) {
 }
 
 export function validateDraft({ supplierId = "", lines = [] } = {}) {
+  const errors = { lines: {} };
   if (!supplierId) {
-    return "Choose a supplier.";
+    errors.supplierId = "Choose a supplier.";
   }
   if (lines.length === 0) {
-    return "Add at least one product to the order.";
-  }
-  if (lines.length > MAX_LINES) {
-    return `A purchase order can have at most ${MAX_LINES} lines.`;
+    errors.form = "Add at least one product to the order.";
+  } else if (lines.length > MAX_LINES) {
+    errors.form = `A purchase order can have at most ${MAX_LINES} lines.`;
   }
 
   for (const line of lines) {
     const { qty, costCents } = lineAmounts(line);
+    const lineErrors = {};
     if (qty === null || qty < 1) {
-      return `Enter a whole quantity of 1 or more for ${line.label}.`;
-    }
-    if (qty > MAX_LINE_QTY) {
-      return `The quantity for ${line.label} cannot be more than ${MAX_LINE_QTY}.`;
+      lineErrors.qty = "Enter a whole number of 1 or more.";
+    } else if (qty > MAX_LINE_QTY) {
+      lineErrors.qty = `At most ${MAX_LINE_QTY}.`;
     }
     if (costCents === null) {
-      return `Enter a cost price with up to 2 decimals for ${line.label}.`;
+      lineErrors.costPrice = "Use a number with up to 2 decimals.";
+    } else if (costCents > toCents(99999999.99)) {
+      lineErrors.costPrice = "That cost price is too large.";
     }
-    if (costCents > toCents(99999999.99)) {
-      return `The cost price for ${line.label} is too large.`;
+    if (Object.keys(lineErrors).length > 0) {
+      errors.lines[line.variantId] = lineErrors;
     }
   }
-  return "";
+  return errors;
 }
+
+export const hasDraftErrors = (errors) =>
+  Boolean(errors.supplierId || errors.form || Object.keys(errors.lines).length > 0);
 
 export const draftBody = ({ supplierId, lines }) => ({
   supplierId: Number(supplierId),

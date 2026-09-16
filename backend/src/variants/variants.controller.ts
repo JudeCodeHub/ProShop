@@ -19,6 +19,7 @@ export class VariantsController {
   constructor(private readonly variantsService: VariantsService) {}
 
   @Get('barcode/:code')
+  @Roles(Role.cashier, Role.admin)
   findByBarcode(@Param('code') code: string) {
     return this.variantsService.findByBarcode(code);
   }

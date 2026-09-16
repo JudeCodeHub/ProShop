@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { cartTotals, toCents } from "@/lib/money";
 import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
 import CartPanel from "./cart-panel";
+import CustomerPicker, { toCustomer } from "./customer-picker";
 import ProductResults from "./product-results";
 import ReceiptDialog from "./receipt-dialog";
 
@@ -25,7 +26,7 @@ function toItem(product, variant) {
 
 const describe = (item) => `${item.name} (${item.size} / ${item.color})`;
 
-export default function PosTerminal() {
+export default function PosTerminal({ initialCustomerId }) {
   const searchRef = useRef(null);
   const [settings, setSettings] = useState(null);
   const [settingsError, setSettingsError] = useState("");
@@ -36,6 +37,8 @@ export default function PosTerminal() {
   const [discountMode, setDiscountMode] = useState("amount");
   const [discountInput, setDiscountInput] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [customer, setCustomer] = useState(null);
+  const [redemption, setRedemption] = useState(null);
   const [submitting, setSubmitting] = useState(null);
   const [notice, setNotice] = useState(null);
   const [receipt, setReceipt] = useState(null);
@@ -45,7 +48,12 @@ export default function PosTerminal() {
   const results = searchIsCurrent ? search.items : [];
   const currency = settings?.currency ?? "LKR";
   const taxRate = settings?.taxRate ?? "0";
-  const totals = cartTotals(cart, { discountMode, discountInput, taxRate });
+  const totals = cartTotals(cart, {
+    discountMode,
+    discountInput,
+    taxRate,
+    pointsDiscountCents: redemption?.discountCents ?? 0,
+  });
 
   const focusSearch = useCallback(() => searchRef.current?.focus(), []);
 
@@ -59,6 +67,25 @@ export default function PosTerminal() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!initialCustomerId) {
+      return undefined;
+    }
+    let cancelled = false;
+    api.get(`/customers/${initialCustomerId}`).then(
+      (data) => !cancelled && setCustomer(toCustomer(data)),
+      (error) =>
+        !cancelled &&
+        setNotice({
+          type: "error",
+          text: error.status === 404 ? `Customer ${initialCustomerId} was not found.` : error.message,
+        }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [initialCustomerId]);
 
   useEffect(() => {
     if (!term) {
@@ -151,24 +178,38 @@ export default function PosTerminal() {
 
   const removeLine = (id) => setCart((current) => current.filter((line) => line.id !== id));
 
+  const chooseCustomer = (next) => {
+    setCustomer(next);
+    setRedemption(null);
+  };
+
   const resetSale = () => {
     setCart([]);
     setDiscountInput("");
     setDiscountMode("amount");
     setPaymentMethod("cash");
+    setCustomer(null);
+    setRedemption(null);
   };
 
   async function submit(kind) {
     if (!cart.length || totals.discountError || submitting) {
       return;
     }
+    if (kind === "hold" && redemption) {
+      setNotice({ type: "error", text: "Stop using loyalty points before holding the sale. Points can only be used on a completed sale." });
+      return;
+    }
     setSubmitting(kind);
     setNotice(null);
 
+    const customerName = customer?.name;
     const body = {
       items: cart.map((line) => ({ variantId: line.id, qty: line.qty })),
       paymentMethod,
-      ...(totals.discount > 0 && { discount: totals.discount / 100 }),
+      ...(totals.manualDiscount > 0 && { discount: totals.manualDiscount / 100 }),
+      ...(customer && { customerId: customer.id }),
+      ...(kind === "complete" && redemption && { redeemPoints: redemption.points }),
     };
 
     try {
@@ -179,7 +220,10 @@ export default function PosTerminal() {
       if (kind === "hold") {
         setNotice({ type: "success", text: `Sale held as order #${order.id}. Resume it from Held sales.` });
       } else {
-        setNotice({ type: "success", text: `Sale #${order.id} completed.` });
+        const earned = order.pointsEarned
+          ? ` ${customerName} earned ${order.pointsEarned} point${order.pointsEarned === 1 ? "" : "s"}.`
+          : "";
+        setNotice({ type: "success", text: `Sale #${order.id} completed.${earned}` });
         try {
           setReceipt(await api.get(`/orders/${order.id}/receipt`));
         } catch (error) {
@@ -268,6 +312,18 @@ export default function PosTerminal() {
         discountInput={discountInput}
         paymentMethod={paymentMethod}
         submitting={submitting}
+        holdDisabledReason={redemption ? "Stop using points to hold this sale" : ""}
+        customerSlot={
+          <CustomerPicker
+            customer={customer}
+            redemption={redemption}
+            currency={currency}
+            disabled={Boolean(submitting)}
+            onSelect={chooseCustomer}
+            onClear={() => chooseCustomer(null)}
+            onRedemptionChange={setRedemption}
+          />
+        }
         onDiscountModeChange={setDiscountMode}
         onDiscountInputChange={setDiscountInput}
         onPaymentMethodChange={setPaymentMethod}

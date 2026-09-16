@@ -24,6 +24,8 @@ export default function CartPanel({
   discountInput,
   paymentMethod,
   submitting,
+  holdDisabledReason,
+  customerSlot,
   onDiscountModeChange,
   onDiscountInputChange,
   onPaymentMethodChange,
@@ -131,6 +133,8 @@ export default function CartPanel({
       )}
 
       <div className="space-y-4 border-t border-slate-200 px-4 py-4">
+        {customerSlot}
+
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <label htmlFor="pos-discount" className="text-sm font-medium text-slate-700">
@@ -174,7 +178,8 @@ export default function CartPanel({
 
         <dl className="space-y-1">
           <Row label="Subtotal" value={money(totals.subtotal)} />
-          {totals.discount > 0 && <Row label="Discount" value={`−${money(totals.discount)}`} />}
+          {totals.manualDiscount > 0 && <Row label="Discount" value={`−${money(totals.manualDiscount)}`} />}
+          {totals.pointsDiscount > 0 && <Row label="Loyalty points" value={`−${money(totals.pointsDiscount)}`} />}
           <Row label={`Tax (${Number(taxRate)}%)`} value={money(totals.tax)} />
           <Row label="Total" value={money(totals.total)} strong />
         </dl>
@@ -210,7 +215,8 @@ export default function CartPanel({
           <button
             type="button"
             onClick={onHold}
-            disabled={!canSubmit}
+            disabled={!canSubmit || Boolean(holdDisabledReason)}
+            title={holdDisabledReason || undefined}
             className="rounded-md px-3 py-3 font-medium text-slate-800 ring-1 ring-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting === "hold" ? "Holding…" : "Hold Sale"}
